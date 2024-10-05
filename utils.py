@@ -57,7 +57,7 @@ class SpeechAnalyzer:
         return round(vocab_score, 2)
 
     def get_summary(self, category, score, transcription):
-        prompt = f"Analyze the following transcription based on the parameters of {category}. Provide a score from 1 to 10, and a professional summary explaining the reasoning behind the score. Include areas of strength and specific suggestions for improvement where applicable: '{transcription}' with a score of {score}/10. Answer in a FEW LINES, NOT IN POINTS. Talk from a 3rd person perspective, in respect to the candidate. Do not show the score in the summary."
+        prompt = f"Analyze the following transcription based on the parameters of {category}. Provide a score from 1 to 10, and a professional summary explaining the reasoning behind the score. Include areas of strength and specific suggestions for improvement where applicable: '{transcription}' with a score of {score}/10. Answer in a FEW LINES, NOT IN POINTS. Talk from a 3rd person perspective, in respect to the candidate. DO NOT SHOW OR TALK ABOUT the score in the summary, just talk about the candidate performance WITHOUT SPECIFYING THE SCORE."
         
         try:
             client = openai.OpenAI()
@@ -73,7 +73,7 @@ class SpeechAnalyzer:
             return f"Failed to generate summary for {category}: {str(e)}"
 
     def get_overall_summary(self, data):
-        prompt = f"Provide an Overall summary detailing the speaker's strengths, opportunities for improvement, and specific steps to enhance the overall communication style. Here the Overall Candidate summary: {data}. Answer in a FEW LINES, NOT IN POINTS. Talk from a 3rd person perspective, in respect to the candidate."
+        prompt = f"Provide an Overall summary detailing the speaker's strengths, opportunities for improvement, and specific steps to enhance the overall communication style. Here the Overall Candidate summary: {data}. Answer in a FEW LINES, NOT IN POINTS. Talk from a 3rd person perspective, in respect to the candidate. DO NOT SHOW OR TALK ABOUT the score in the summary, just talk about the candidate performance WITHOUT SPECIFYING THE SCORE."
 
         try:
             client = openai.OpenAI()
