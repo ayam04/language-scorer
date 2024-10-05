@@ -57,34 +57,32 @@ class SpeechAnalyzer:
         return round(vocab_score, 2)
 
     def get_summary(self, category, score, transcription):
-        prompt = f"Analyze the following transcription based on the parameters of {category}. Provide a score from 1 to 10, and a professional summary explaining the reasoning behind the score. Include areas of strength and specific suggestions for improvement where applicable: '{transcription}' with a score of {score}/10."
+        prompt = f"Analyze the following transcription based on the parameters of {category}. Provide a score from 1 to 10, and a professional summary explaining the reasoning behind the score. Include areas of strength and specific suggestions for improvement where applicable: '{transcription}' with a score of {score}/10. Answer in a FEW LINES, NOT IN POINTS. Talk from a 3rd person perspective, in respect to the candidate. Do not show the score in the summary."
         
         try:
             client = openai.OpenAI()
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that provides detailed speech analysis based on various parameters."},
+                    {"role": "system", "content": "You are a helpful assistant that provides detailed but concise speech analysis based on various parameters. You analyse candidate interview."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=100
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
             return f"Failed to generate summary for {category}: {str(e)}"
-    
+
     def get_overall_summary(self, data):
-        prompt = f"Provide an Overall summary detailing the speaker’s strengths, opportunities for improvement, and specific steps to enhance the overall communication style. Here the Overall Candidate summary: {data}"
+        prompt = f"Provide an Overall summary detailing the speaker's strengths, opportunities for improvement, and specific steps to enhance the overall communication style. Here the Overall Candidate summary: {data}. Answer in a FEW LINES, NOT IN POINTS. Talk from a 3rd person perspective, in respect to the candidate."
 
         try:
             client = openai.OpenAI()
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that provides detailed speech analysis based on various parameters."},
+                    {"role": "system", "content": "You are a helpful assistant that provides detailed but concise speech analysis based on various parameters. You analyse candidate interview."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=100
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
@@ -103,9 +101,8 @@ class SpeechAnalyzer:
         data = {
             "transcription": transcription,
             "scores": {
-                "overall": {
-                    "score": overall_score,
-                },
+                "overall_score": overall_score,
+                "overall_summary": "",
                 "accent": {
                     "score": accent_score,
                     "summary": self.get_summary("accent", accent_score, transcription)
@@ -125,7 +122,6 @@ class SpeechAnalyzer:
             }
         }
 
-        data["scores"]["overall"]["summary"] = self.get_overall_summary(data)
+        data["scores"]["overall_summary"] = self.get_overall_summary(data)
 
         return data
-
