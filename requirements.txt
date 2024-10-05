@@ -1,0 +1,8 @@
+fastapi
+openai-whisper
+torch
+transformers[torch]
+librosa
+numpy
+uvicorn
+openai
