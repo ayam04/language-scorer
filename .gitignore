@@ -1,1 +1,4 @@
 .env
+svarah_accent_classifier.pth
+svarah_accent_classifier_final.pth
+upd_model.pth
