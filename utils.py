@@ -3,6 +3,8 @@ import librosa
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from scipy.spatial.distance import cosine
+from sklearn.preprocessing import normalize
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
 import whisper
 import openai
@@ -12,9 +14,13 @@ import re
 from collections import defaultdict
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
+from pymongo import MongoClient
 
 load_dotenv()
 
+MONGO_URI = os.getenv("MONGO_URI")
+DB_NAME = os.getenv("DB_NAME")
+COLLECTION_NAME = os.getenv("COLLECTION_NAME")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 SAMPLE_RATE = 44000
@@ -45,7 +51,7 @@ class AccentClassifier(nn.Module):
         x = self.pool(F.relu(self.batch_norm2(self.conv2(x))))
         x = self.pool(F.relu(self.batch_norm3(self.conv3(x))))
 
-        x = x.view(x.size(0), -1)  # Flatten
+        x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         x = self.dropout(x)
         x = self.fc2(x)
@@ -132,23 +138,47 @@ class SpeechAnalyzer:
         
         return torch.FloatTensor(mfcc).unsqueeze(0)
     
-    def predict_accent(self, file_path):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.accent_model.to(device)
-        self.accent_model.eval()
+    def extract_accent_features(self, audio_path, n_mfcc=13):
+        y, sr = librosa.load(audio_path, sr=None)
+        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc)
+        mfcc_mean = np.mean(mfcc.T, axis=0)
+        return mfcc_mean
+    
+    def add_vector_to_mongodb(self, accent, vector):
+        client = MongoClient(MONGO_URI)
+        db = client[DB_NAME]
+        collection = db[COLLECTION_NAME]
 
-        features = self.extract_features(file_path)
-        if features is None:
-            return "Error: Could not process audio file"
+        collection.insert_one({
+            "accent": accent,
+            "vector": vector.tolist()
+        })
 
-        features = features.to(device)
+        client.close()
+        
+    def match_accent(self, input_audio):
+        client = MongoClient(MONGO_URI)
+        db = client[DB_NAME]
+        collection = db[COLLECTION_NAME]
 
-        with torch.no_grad():
-            outputs = self.accent_model(features)
-            _, predicted = outputs.max(1)
-            predicted_accent = self.le.inverse_transform(predicted.cpu().numpy())[0]
+        input_vector = self.extract_accent_features(input_audio)
+        input_vector = normalize([input_vector])[0]
 
-        return predicted_accent
+        all_vectors = list(collection.find({}, {"_id": 0, "accent": 1, "vector": 1}))
+
+        similarities = []
+        for doc in all_vectors:
+            vec = normalize([doc["vector"]])[0]
+            similarity = 1 - cosine(input_vector, vec)
+            similarities.append((doc["accent"], similarity))
+
+        if similarities:
+            matched_accent, similarity_score = max(similarities, key=lambda x: x[1])
+        else:
+            matched_accent, similarity_score = None, -1
+
+        client.close()
+        return matched_accent, similarity_score
     
     def load_label_encoder(self, meta_file):
         meta_data = pd.read_csv(meta_file)
@@ -201,7 +231,7 @@ class SpeechAnalyzer:
         clarity_score = self.analyze_clarity(transcription)
         confidence_score = self.analyze_confidence(transcription)
         vocabulary_score = self.analyze_vocabulary(transcription)
-        predicted_accent = self.predict_accent(audio_path)
+        matched_accent, similarity_score = self.match_accent(audio_path)
         
         overall_score = round((accent_score + clarity_score + confidence_score + vocabulary_score) / 4, 2)
         
@@ -213,7 +243,8 @@ class SpeechAnalyzer:
                 "accent": {
                     "score": accent_score,
                     "summary": self.get_summary("accent", accent_score, transcription),
-                    "predicted_accent": predicted_accent
+                    "matched_accent": matched_accent,
+                    "similarity_score": round(similarity_score*10,2)
                 },
                 "clarity_and_articulation": {
                     "score": clarity_score,
@@ -233,9 +264,3 @@ class SpeechAnalyzer:
         data["scores"]["overall_summary"] = self.get_overall_summary(data)
 
         return data
-
-# if __name__ == "__main__":
-#     analyzer = SpeechAnalyzer()
-#     audio_file_path = "AudioSamples/accent_test.wav"
-#     results = analyzer.analyze_speech(audio_file_path)
-#     print(json.dumps(results, indent=2))
